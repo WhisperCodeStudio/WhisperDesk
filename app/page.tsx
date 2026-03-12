@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import WhisperLayout from "./components/whisper-layout";
 import { supabase } from "@/lib/supabase";
 import type { Task } from "./data/master-tasks";
-import Link from "next/link";
 
 export default function Home() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -21,10 +21,8 @@ export default function Home() {
         : "Good evening Lexii";
 
   const chooseThree = (taskList: Task[]): Task[] => {
-    const incomplete = taskList.filter((task) => !task.completed);
-
-    const shuffled = [...incomplete].sort(() => 0.5 - Math.random());
-
+    const incompleteTasks = taskList.filter((task) => !task.completed);
+    const shuffled = [...incompleteTasks].sort(() => 0.5 - Math.random());
     return shuffled.slice(0, 3);
   };
 
@@ -80,7 +78,12 @@ export default function Home() {
     );
 
     setTasks(updatedTasks);
-    setTopTasks(chooseThree(updatedTasks));
+
+    setTopTasks((prevTopTasks) =>
+      prevTopTasks.map((task) =>
+        task.id === taskId ? { ...task, completed } : task,
+      ),
+    );
   };
 
   const businessTasks = tasks.filter(
@@ -89,35 +92,77 @@ export default function Home() {
       task.category === "business_admin" ||
       task.category === "strategy",
   );
+
   const completedBusinessTasks = businessTasks.filter(
     (task) => task.completed,
   ).length;
 
+  const tasksCompletedToday = tasks.filter((task) => {
+    if (!task.completed || !task.updated_at) return false;
+
+    const today = new Date().toDateString();
+    const updated = new Date(task.updated_at).toDateString();
+
+    return today === updated;
+  }).length;
+
+  const getDailyMessage = () => {
+    if (tasksCompletedToday === 0) {
+      return "A fresh start for the studio today.";
+    }
+
+    if (tasksCompletedToday === 1) {
+      return "Nice start. One step forward.";
+    }
+
+    if (tasksCompletedToday <= 4) {
+      return "Good momentum today. Yay you.";
+    }
+
+    return "Strong progress today. WhisperCode grows.";
+  };
+
+  const allTopTasksComplete =
+    topTasks.length > 0 && topTasks.every((task) => task.completed);
+
   return (
     <WhisperLayout>
       <div>
-        <h2 className="mb-2 text-3xl">{greeting}</h2>
+        <h2 className="mb-2 text-3xl text-white">{greeting}</h2>
 
-        <p className="mb-8 text-(--whisper-muted)">
-          Here&apos;s your command centre.
-        </p>
+        <p className="text-white/70">Here&apos;s your command centre.</p>
+
+        <p className="mb-8 mt-2 text-sm text-white/60">{getDailyMessage()}</p>
 
         <div className="space-y-6">
-          <div className="rounded-2xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-6 backdrop-blur-xl shadow-[0_10px_40px_rgba(0,0,0,0.4)]">
-            <h3 className="mb-4 text-xl">Today&apos;s Top 3</h3>
+          <div className="rounded-2xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl">
+            <h3 className="mb-4 text-xl text-white">Today&apos;s Top 3</h3>
 
             {loading ? (
-              <p className="text-(--whisper-muted)">Loading tasks...</p>
+              <p className="text-white/60">Loading tasks...</p>
             ) : topTasks.length === 0 ? (
-              <p className="text-(--whisper-muted)">No tasks found.</p>
+              <p className="text-white/60">No tasks found.</p>
+            ) : allTopTasksComplete ? (
+              <div className="rounded-xl border border-violet-400/30 bg-violet-400/10 p-4">
+                <p className="text-base text-white">✨ Daily focus complete</p>
+                <p className="mt-1 text-sm text-white/70">
+                  The studio moved forward today. Yay you.
+                </p>
+                <button
+                  onClick={() => setTopTasks(chooseThree(tasks))}
+                  className="mt-4 text-sm text-violet-400 hover:underline"
+                >
+                  Choose another 3
+                </button>
+              </div>
             ) : (
               <>
-                <ul className="space-y-4 text-(--whisper-muted)">
+                <ul className="space-y-5">
                   {topTasks.map((task) => (
                     <li key={task.id} className="flex items-start gap-3">
                       <input
                         type="checkbox"
-                        className="peer mt-1 h-4 w-4 accent-(--whisper-primary)"
+                        className="peer mt-1 h-4 w-4 accent-violet-500"
                         checked={task.completed}
                         onChange={(e) =>
                           toggleTaskCompleted(task.id, e.target.checked)
@@ -125,14 +170,18 @@ export default function Home() {
                       />
 
                       <div className="flex flex-col gap-1">
-                        <span className="transition peer-checked:line-through peer-checked:opacity-50">
+                        <span
+                          className={`transition ${
+                            task.completed
+                              ? "line-through opacity-50"
+                              : "text-white"
+                          }`}
+                        >
                           {task.title || task.text}
                         </span>
 
                         <div className="flex items-center gap-2 text-xs">
-                          <span className="text-(--whisper-muted)">
-                            {task.category}
-                          </span>
+                          <span className="text-white/60">{task.category}</span>
 
                           <span
                             className={`rounded-full px-2 py-0.5 text-xs font-medium ${getPriorityPill(
@@ -149,7 +198,7 @@ export default function Home() {
 
                 <button
                   onClick={() => setTopTasks(chooseThree(tasks))}
-                  className="mt-4 text-sm text-(--whisper-primary) hover:underline"
+                  className="mt-4 text-sm text-violet-400 hover:underline"
                 >
                   Choose another 3
                 </button>
@@ -158,17 +207,17 @@ export default function Home() {
           </div>
 
           <Link href="/business-setup">
-            <div className="rounded-2xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-6 backdrop-blur-xl shadow-[0_10px_40px_rgba(0,0,0,0.4)] cursor-pointer hover:border-(--whisper-primary)/40 transition">
-              <h3 className="mb-2 text-xl">Business Setup</h3>
+            <div className="cursor-pointer rounded-2xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl transition hover:border-violet-400/40">
+              <h3 className="mb-2 text-xl text-white">Business Setup</h3>
 
-              <p className="text-(--whisper-muted)">
+              <p className="text-white/70">
                 {completedBusinessTasks} of {businessTasks.length} tasks
                 complete
               </p>
 
               <div className="mt-3 h-2 w-full rounded-full bg-white/10">
                 <div
-                  className="h-2 rounded-full bg-(--whisper-primary)"
+                  className="h-2 rounded-full bg-violet-500"
                   style={{
                     width: `${
                       businessTasks.length

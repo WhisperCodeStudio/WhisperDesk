@@ -8,4 +8,5 @@ export type Task = {
   category: string;
   task_type?: string;
   source?: string;
+  updated_at?: string;
 };
