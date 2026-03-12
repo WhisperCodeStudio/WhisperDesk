@@ -62,7 +62,7 @@ export default function Home() {
     }
   };
 
-  const toggleTaskCompleted = async (taskId: number, completed: boolean) => {
+  const toggleTaskCompleted = async (taskId: string, completed: boolean) => {
     const { error } = await supabase
       .from("tasks")
       .update({ completed })
