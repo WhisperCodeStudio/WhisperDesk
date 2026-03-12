@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import WhisperLayout from "./components/whisper-layout";
 import { supabase } from "@/lib/supabase";
 import type { Task } from "./data/master-tasks";
+import Link from "next/link";
 
 export default function Home() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -21,7 +22,9 @@ export default function Home() {
 
   const chooseThree = (taskList: Task[]): Task[] => {
     const incomplete = taskList.filter((task) => !task.completed);
+
     const shuffled = [...incomplete].sort(() => 0.5 - Math.random());
+
     return shuffled.slice(0, 3);
   };
 
@@ -80,7 +83,12 @@ export default function Home() {
     setTopTasks(chooseThree(updatedTasks));
   };
 
-  const businessTasks = tasks.filter((task) => task.category === "business");
+  const businessTasks = tasks.filter(
+    (task) =>
+      task.category === "business" ||
+      task.category === "business_admin" ||
+      task.category === "strategy",
+  );
   const completedBusinessTasks = businessTasks.filter(
     (task) => task.completed,
   ).length;
@@ -149,12 +157,29 @@ export default function Home() {
             )}
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-6 backdrop-blur-xl shadow-[0_10px_40px_rgba(0,0,0,0.4)]">
-            <h3 className="mb-2 text-xl">Business Setup</h3>
-            <p className="text-(--whisper-muted)">
-              {completedBusinessTasks} of {businessTasks.length} tasks complete
-            </p>
-          </div>
+          <Link href="/business-setup">
+            <div className="rounded-2xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-6 backdrop-blur-xl shadow-[0_10px_40px_rgba(0,0,0,0.4)] cursor-pointer hover:border-(--whisper-primary)/40 transition">
+              <h3 className="mb-2 text-xl">Business Setup</h3>
+
+              <p className="text-(--whisper-muted)">
+                {completedBusinessTasks} of {businessTasks.length} tasks
+                complete
+              </p>
+
+              <div className="mt-3 h-2 w-full rounded-full bg-white/10">
+                <div
+                  className="h-2 rounded-full bg-(--whisper-primary)"
+                  style={{
+                    width: `${
+                      businessTasks.length
+                        ? (completedBusinessTasks / businessTasks.length) * 100
+                        : 0
+                    }%`,
+                  }}
+                />
+              </div>
+            </div>
+          </Link>
         </div>
       </div>
     </WhisperLayout>
