@@ -20,7 +20,8 @@ export default function Home() {
         : "Good evening Lexii";
 
   const chooseThree = (taskList: Task[]): Task[] => {
-    const shuffled = [...taskList].sort(() => 0.5 - Math.random());
+    const incomplete = taskList.filter((task) => !task.completed);
+    const shuffled = [...incomplete].sort(() => 0.5 - Math.random());
     return shuffled.slice(0, 3);
   };
 
@@ -71,14 +72,18 @@ export default function Home() {
       return;
     }
 
-    setTasks((prev) =>
-      prev.map((task) => (task.id === taskId ? { ...task, completed } : task)),
+    const updatedTasks = tasks.map((task) =>
+      task.id === taskId ? { ...task, completed } : task,
     );
 
-    setTopTasks((prev) =>
-      prev.map((task) => (task.id === taskId ? { ...task, completed } : task)),
-    );
+    setTasks(updatedTasks);
+    setTopTasks(chooseThree(updatedTasks));
   };
+
+  const businessTasks = tasks.filter((task) => task.category === "business");
+  const completedBusinessTasks = businessTasks.filter(
+    (task) => task.completed,
+  ).length;
 
   return (
     <WhisperLayout>
@@ -113,7 +118,7 @@ export default function Home() {
 
                       <div className="flex flex-col gap-1">
                         <span className="transition peer-checked:line-through peer-checked:opacity-50">
-                          {task.text}
+                          {task.title || task.text}
                         </span>
 
                         <div className="flex items-center gap-2 text-xs">
@@ -146,7 +151,9 @@ export default function Home() {
 
           <div className="rounded-2xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-6 backdrop-blur-xl shadow-[0_10px_40px_rgba(0,0,0,0.4)]">
             <h3 className="mb-2 text-xl">Business Setup</h3>
-            <p className="text-(--whisper-muted)">0 of 12 tasks complete</p>
+            <p className="text-(--whisper-muted)">
+              {completedBusinessTasks} of {businessTasks.length} tasks complete
+            </p>
           </div>
         </div>
       </div>
