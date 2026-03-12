@@ -60,6 +60,26 @@ export default function Home() {
     }
   };
 
+  const toggleTaskCompleted = async (taskId: number, completed: boolean) => {
+    const { error } = await supabase
+      .from("tasks")
+      .update({ completed })
+      .eq("id", taskId);
+
+    if (error) {
+      console.error("Error updating task:", error);
+      return;
+    }
+
+    setTasks((prev) =>
+      prev.map((task) => (task.id === taskId ? { ...task, completed } : task)),
+    );
+
+    setTopTasks((prev) =>
+      prev.map((task) => (task.id === taskId ? { ...task, completed } : task)),
+    );
+  };
+
   return (
     <WhisperLayout>
       <div>
@@ -85,7 +105,10 @@ export default function Home() {
                       <input
                         type="checkbox"
                         className="peer mt-1 h-4 w-4 accent-(--whisper-primary)"
-                        defaultChecked={task.completed}
+                        checked={task.completed}
+                        onChange={(e) =>
+                          toggleTaskCompleted(task.id, e.target.checked)
+                        }
                       />
 
                       <div className="flex flex-col gap-1">
