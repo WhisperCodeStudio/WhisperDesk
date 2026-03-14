@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import Image from "next/image";
 
 type WhisperLayoutProps = {
   children: ReactNode;
@@ -28,7 +29,14 @@ export default function WhisperLayout({ children }: WhisperLayoutProps) {
             <div className="border-b border-white/10 px-6 py-6">
               <div className="flex items-center gap-4">
                 <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[linear-gradient(180deg,rgba(124,58,237,0.35),rgba(59,130,246,0.18))] shadow-[0_10px_30px_rgba(76,29,149,0.25)]">
-                  <span className="text-2xl text-violet-400">▽</span>
+                  <Image
+                    src="/logo/whispercode-icon.png"
+                    alt="WhisperCode"
+                    width={32}
+                    height={32}
+                    className="h-auto w-auto object-contain drop-shadow-[0_0_8px_rgba(168,85,247,0.35)]"
+                    priority
+                  />
                 </div>
 
                 <div>
