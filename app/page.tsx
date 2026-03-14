@@ -237,7 +237,9 @@ export default function Home() {
                 <p className="text-white/60">No tasks found.</p>
               ) : allTopTasksComplete ? (
                 <div className="rounded-xl border border-violet-400/30 bg-violet-400/10 p-4">
-                  <p className="text-base text-white">✨ Current focus complete</p>
+                  <p className="text-base text-white">
+                    ✨ Current focus complete
+                  </p>
                   <p className="mt-1 text-sm text-white/70">
                     The studio moved forward today. Choose the next three when
                     you&apos;re ready.
