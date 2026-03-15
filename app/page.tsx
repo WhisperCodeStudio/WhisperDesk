@@ -43,6 +43,7 @@ const STAGE_ORDER = [
 export default function Home() {
   const [tasks, setTasks] = useState<RoadmapTask[]>([]);
   const [topTasks, setTopTasks] = useState<RoadmapTask[]>([]);
+  const [currentStage, setCurrentStage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showFullRoadmap, setShowFullRoadmap] = useState(false);
 
@@ -79,6 +80,26 @@ export default function Home() {
       .slice(0, 3);
   };
 
+  const getCurrentStage = (taskList: RoadmapTask[]): string | null => {
+    const incompleteTasks = [...taskList]
+      .filter((task) => !task.completed)
+      .sort((a, b) => {
+        const stageA = a.stage_order ?? 999;
+        const stageB = b.stage_order ?? 999;
+        if (stageA !== stageB) return stageA - stageB;
+
+        const flowA = a.flow_order ?? 999;
+        const flowB = b.flow_order ?? 999;
+        if (flowA !== flowB) return flowA - flowB;
+
+        return (a.title || "").localeCompare(b.title || "");
+      });
+
+    if (incompleteTasks.length === 0) return null;
+
+    return incompleteTasks[0].stage ?? null;
+  };
+
   useEffect(() => {
     const loadTasks = async () => {
       try {
@@ -97,6 +118,7 @@ export default function Home() {
 
         setTasks(data);
         setTopTasks(chooseNextThree(data));
+        setCurrentStage(getCurrentStage(data));
       } catch (err) {
         console.error("Unexpected error loading tasks:", err);
       } finally {
@@ -151,6 +173,7 @@ export default function Home() {
 
     setTasks(updatedTasks);
     setTopTasks(chooseNextThree(updatedTasks));
+    setCurrentStage(getCurrentStage(updatedTasks));
   };
 
   const tasksCompletedToday = tasks.filter((task) => {
@@ -224,14 +247,20 @@ export default function Home() {
             <div className="rounded-2xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl">
               <div className="mb-4 flex items-start justify-between gap-4">
                 <div>
-                  <h3 className="text-xl text-white">Next 3</h3>
+                  <h3 className="text-xl text-white">
+                    Next 3 ·{" "}
+                    {currentStage ? getStagePill(currentStage) : "All Done"}
+                  </h3>
                   <p className="mt-1 text-sm text-white/60">
                     Your next calm, logical steps. No random gremlins.
                   </p>
                 </div>
 
                 <button
-                  onClick={() => setTopTasks(chooseNextThree(tasks))}
+                  onClick={() => {
+                    setTopTasks(chooseNextThree(tasks));
+                    setCurrentStage(getCurrentStage(tasks));
+                  }}
                   className="text-sm text-violet-400 hover:underline"
                 >
                   Refresh
@@ -252,7 +281,10 @@ export default function Home() {
                     you&apos;re ready.
                   </p>
                   <button
-                    onClick={() => setTopTasks(chooseNextThree(tasks))}
+                    onClick={() => {
+                      setTopTasks(chooseNextThree(tasks));
+                      setCurrentStage(getCurrentStage(tasks));
+                    }}
                     className="mt-4 text-sm text-violet-400 hover:underline"
                   >
                     Show next 3
