@@ -148,6 +148,11 @@ export default function Home() {
 
   const prettifyCategory = (category?: string | null) => {
     if (!category) return "Uncategorised";
+
+    if (category === "business_admin") return "Business Admin";
+    if (category === "founder_ritual") return "Founder Ritual";
+    if (category === "product_build") return "Product Build";
+
     return category
       .split("_")
       .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
@@ -215,6 +220,11 @@ export default function Home() {
     if (showFullRoadmap) return stageStats;
     return stageStats.filter((stage) => stage.key === nextUnlockedStage);
   }, [showFullRoadmap, stageStats, nextUnlockedStage]);
+
+  const overallRoadmapPercent = useMemo(() => {
+    if (tasks.length === 0) return 0;
+    return Math.round((totalCompleted / tasks.length) * 100);
+  }, [tasks.length, totalCompleted]);
 
   const getDailyMessage = () => {
     if (tasksCompletedToday === 0) {
@@ -359,6 +369,9 @@ export default function Home() {
                     <p className="text-lg text-white">
                       {totalCompleted} / {tasks.length}
                     </p>
+                    <p className="text-sm text-violet-300/80">
+                      {overallRoadmapPercent}%
+                    </p>
                   </div>
 
                   <button
@@ -381,8 +394,8 @@ export default function Home() {
                   <div className="rounded-xl border border-violet-400/30 bg-violet-400/10 p-4">
                     <p className="text-base text-white">✨ Roadmap complete</p>
                     <p className="mt-1 text-sm text-white/70">
-                      Every stage is complete. That deserves a little proud
-                      founder moment.
+                      Every stage is complete. That deserves a proud founder
+                      moment.
                     </p>
                   </div>
                 ) : (
@@ -423,6 +436,15 @@ export default function Home() {
                           style={{ width: `${stage.percent}%` }}
                         />
                       </div>
+
+                      <div className="mt-4">
+                        <Link
+                          href={`/roadmap/${stage.key}`}
+                          className="text-sm text-violet-400 hover:underline"
+                        >
+                          Open stage →
+                        </Link>
+                      </div>
                     </div>
                   ))
                 )}
@@ -449,8 +471,24 @@ export default function Home() {
                       : "All stages complete"}
                   </p>
                 </div>
+
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-white/55">Roadmap progress</p>
+                  <p className="mt-1 text-lg text-white">
+                    {overallRoadmapPercent}%
+                  </p>
+                </div>
               </div>
             </div>
+
+            <Link href="/roadmap">
+              <div className="cursor-pointer rounded-2xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl transition hover:border-violet-400/40">
+                <h3 className="mb-2 text-xl text-white">Open roadmap</h3>
+                <p className="text-white/70">
+                  View the full founder journey and open any stage directly.
+                </p>
+              </div>
+            </Link>
 
             <Link href="/business-setup">
               <div className="cursor-pointer rounded-2xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl transition hover:border-violet-400/40">

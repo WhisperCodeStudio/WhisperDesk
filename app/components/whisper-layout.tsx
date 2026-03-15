@@ -11,11 +11,10 @@ type WhisperLayoutProps = {
 
 const navItems = [
   { label: "Dashboard", href: "/" },
+  { label: "Roadmap", href: "/roadmap" },
   { label: "Business Setup", href: "/business-setup" },
-  { label: "Squirrel List", href: "/squirrel-list" },
-  { label: "Content Planner", href: "/content-planner" },
-  { label: "Admin Vault", href: "/admin-vault" },
   { label: "Weekly Review", href: "/weekly-review" },
+  { label: "Admin Vault", href: "/admin-vault" },
 ];
 
 export default function WhisperLayout({ children }: WhisperLayoutProps) {
