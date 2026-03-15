@@ -56,7 +56,7 @@ export default function Home() {
         : "Good evening Lexii";
 
   const chooseNextThree = (taskList: RoadmapTask[]): RoadmapTask[] => {
-    return [...taskList]
+    const incompleteTasks = [...taskList]
       .filter((task) => !task.completed)
       .sort((a, b) => {
         const stageA = a.stage_order ?? 999;
@@ -68,7 +68,14 @@ export default function Home() {
         if (flowA !== flowB) return flowA - flowB;
 
         return (a.title || "").localeCompare(b.title || "");
-      })
+      });
+
+    if (incompleteTasks.length === 0) return [];
+
+    const currentStageOrder = incompleteTasks[0].stage_order;
+
+    return incompleteTasks
+      .filter((task) => task.stage_order === currentStageOrder)
       .slice(0, 3);
   };
 
