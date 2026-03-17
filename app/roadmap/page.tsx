@@ -2,13 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import WhisperLayout from "../components/whisper-layout";
+import WhisperLayout from "@/app/components/whisper-layout";
 import { supabase } from "@/lib/supabase";
-import type { Task } from "../data/master-tasks";
+import type { Task } from "@/app/data/master-tasks";
 
 type RoadmapTask = Task & {
   stage?: string | null;
   stage_order?: number | null;
+  flow_order?: number | null;
+  depends_on_title?: string | null;
 };
 
 const STAGE_LABELS: Record<string, string> = {
@@ -38,31 +40,168 @@ const STAGE_ORDER = [
   "rhythm",
 ];
 
-export default function RoadmapPage() {
+export default function Home() {
   const [tasks, setTasks] = useState<RoadmapTask[]>([]);
+  const [topTasks, setTopTasks] = useState<RoadmapTask[]>([]);
+  const [currentStage, setCurrentStage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showFullRoadmap, setShowFullRoadmap] = useState(false);
+
+  const hour = new Date().getHours();
+
+  const greeting =
+    hour < 12
+      ? "Good morning Lexii"
+      : hour < 18
+        ? "Good afternoon Lexii"
+        : "Good evening Lexii";
+
+  const chooseNextThree = (taskList: RoadmapTask[]): RoadmapTask[] => {
+    const incompleteTasks = [...taskList]
+      .filter((task) => !task.completed)
+      .sort((a, b) => {
+        const stageA = a.stage_order ?? 999;
+        const stageB = b.stage_order ?? 999;
+        if (stageA !== stageB) return stageA - stageB;
+
+        const flowA = a.flow_order ?? 999;
+        const flowB = b.flow_order ?? 999;
+        if (flowA !== flowB) return flowA - flowB;
+
+        return (a.title || "").localeCompare(b.title || "");
+      });
+
+    if (incompleteTasks.length === 0) return [];
+
+    const currentStageOrder = incompleteTasks[0].stage_order;
+
+    return incompleteTasks
+      .filter((task) => task.stage_order === currentStageOrder)
+      .slice(0, 3);
+  };
+
+  const getCurrentStage = (taskList: RoadmapTask[]): string | null => {
+    const incompleteTasks = [...taskList]
+      .filter((task) => !task.completed)
+      .sort((a, b) => {
+        const stageA = a.stage_order ?? 999;
+        const stageB = b.stage_order ?? 999;
+        if (stageA !== stageB) return stageA - stageB;
+
+        const flowA = a.flow_order ?? 999;
+        const flowB = b.flow_order ?? 999;
+        if (flowA !== flowB) return flowA - flowB;
+
+        return (a.title || "").localeCompare(b.title || "");
+      });
+
+    if (incompleteTasks.length === 0) return null;
+
+    return incompleteTasks[0].stage ?? null;
+  };
 
   useEffect(() => {
     const loadTasks = async () => {
-      const { data, error } = await supabase.from("tasks").select("*");
+      try {
+        const { data, error } = await supabase
+          .from("tasks")
+          .select("*")
+          .order("stage_order", { ascending: true })
+          .order("flow_order", { ascending: true });
 
-      if (error) {
-        console.error("Error loading tasks:", error);
-        return;
+        if (error) {
+          console.error("Failed to load tasks:", error);
+          return;
+        }
+
+        if (!data) return;
+
+        setTasks(data);
+        setTopTasks(chooseNextThree(data));
+        setCurrentStage(getCurrentStage(data));
+      } catch (err) {
+        console.error("Unexpected error loading tasks:", err);
+      } finally {
+        setLoading(false);
       }
-
-      if (data) setTasks(data);
-      setLoading(false);
     };
 
     loadTasks();
   }, []);
 
+  const getPriorityPill = (priority: Task["priority"]) => {
+    switch (priority) {
+      case "high":
+        return "border border-red-500/30 bg-red-500/20 text-red-400";
+      case "medium":
+        return "border border-amber-400/30 bg-amber-400/20 text-amber-300";
+      case "low":
+        return "border border-green-500/30 bg-green-500/20 text-green-400";
+      default:
+        return "border border-white/10 bg-white/10 text-white";
+    }
+  };
+
+  const getStagePill = (stage?: string | null) => {
+    return STAGE_LABELS[stage || ""] || "Unsorted";
+  };
+
+  const prettifyCategory = (category?: string | null) => {
+    if (!category) return "Uncategorised";
+
+    if (category === "business_admin") return "Business Admin";
+    if (category === "founder_ritual") return "Founder Ritual";
+    if (category === "product_build") return "Product Build";
+
+    return category
+      .split("_")
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ");
+  };
+
+  const toggleTaskCompleted = async (taskId: string, completed: boolean) => {
+    const updatedAt = new Date().toISOString();
+
+    const { error } = await supabase
+      .from("tasks")
+      .update({ completed, updated_at: updatedAt })
+      .eq("id", taskId);
+
+    if (error) {
+      console.error("Error updating task:", error);
+      return;
+    }
+
+    const updatedTasks = tasks.map((task) =>
+      task.id === taskId ? { ...task, completed, updated_at: updatedAt } : task,
+    );
+
+    setTasks(updatedTasks);
+    setTopTasks(chooseNextThree(updatedTasks));
+    setCurrentStage(getCurrentStage(updatedTasks));
+  };
+
+  const tasksCompletedToday = tasks.filter((task) => {
+    if (!task.completed || !task.updated_at) return false;
+
+    const today = new Date().toDateString();
+    const updated = new Date(task.updated_at).toDateString();
+
+    return today === updated;
+  }).length;
+
+  const totalCompleted = tasks.filter((task) => task.completed).length;
+
+  const nextUnlockedStage = useMemo(() => {
+    return STAGE_ORDER.find((stage) =>
+      tasks.some((task) => task.stage === stage && !task.completed),
+    );
+  }, [tasks]);
+
   const stageStats = useMemo(() => {
     return STAGE_ORDER.map((stage) => {
       const stageTasks = tasks.filter((task) => task.stage === stage);
-
-      const completed = stageTasks.filter((t) => t.completed).length;
+      const completed = stageTasks.filter((task) => task.completed).length;
 
       return {
         key: stage,
@@ -77,74 +216,293 @@ export default function RoadmapPage() {
     });
   }, [tasks]);
 
-  const currentStage = useMemo(() => {
-    return STAGE_ORDER.find((stage) =>
-      tasks.some((task) => task.stage === stage && !task.completed),
-    );
-  }, [tasks]);
+  const visibleStageStats = useMemo(() => {
+    if (showFullRoadmap) return stageStats;
+    return stageStats.filter((stage) => stage.key === nextUnlockedStage);
+  }, [showFullRoadmap, stageStats, nextUnlockedStage]);
+
+  const overallRoadmapPercent = useMemo(() => {
+    if (tasks.length === 0) return 0;
+    return Math.round((totalCompleted / tasks.length) * 100);
+  }, [tasks.length, totalCompleted]);
+
+  const getDailyMessage = () => {
+    if (tasksCompletedToday === 0) {
+      return "A fresh start for the studio today.";
+    }
+
+    if (tasksCompletedToday === 1) {
+      return "Nice start. One step forward.";
+    }
+
+    if (tasksCompletedToday <= 4) {
+      return "Good momentum today. Yay you.";
+    }
+
+    return "Strong progress today. WhisperCode grows.";
+  };
+
+  const allTopTasksComplete =
+    topTasks.length > 0 && topTasks.every((task) => task.completed);
 
   return (
     <WhisperLayout>
       <div>
-        <h2 className="text-3xl text-white mb-2">Founder Roadmap</h2>
-        <p className="text-white/70 mb-8">
-          Move through the studio in a calm, sensible order.
-        </p>
+        <h2 className="mb-2 text-3xl text-white">{greeting}</h2>
+        <p className="text-white/70">Here&apos;s your founder roadmap.</p>
+        <p className="mb-8 mt-2 text-sm text-white/60">{getDailyMessage()}</p>
 
-        {loading ? (
-          <p className="text-white/60">Loading roadmap...</p>
-        ) : (
+        <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
           <div className="space-y-6">
-            {stageStats.map((stage) => (
-              <div
-                key={stage.key}
-                className={`rounded-2xl border p-6 backdrop-blur-xl shadow-[0_10px_40px_rgba(0,0,0,0.4)] transition ${
-                  stage.key === currentStage
-                    ? "border-violet-400/40 bg-violet-400/10"
-                    : "border-white/10 bg-[rgba(255,255,255,0.04)]"
-                }`}
-              >
-                <div className="flex justify-between items-start mb-3">
-                  <div>
-                    <h3 className="text-xl text-white">{stage.label}</h3>
+            <div className="rounded-2xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl">
+              <div className="mb-4 flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-xl text-white">
+                    Next 3 ·{" "}
+                    {currentStage ? getStagePill(currentStage) : "All Done"}
+                  </h3>
+                  <p className="mt-1 text-sm text-white/60">
+                    Your next calm, logical steps. No random gremlins.
+                  </p>
+                </div>
 
-                    <p className="text-sm text-white/60 mt-1">
-                      {stage.description}
+                <button
+                  onClick={() => {
+                    setTopTasks(chooseNextThree(tasks));
+                    setCurrentStage(getCurrentStage(tasks));
+                  }}
+                  className="text-sm text-violet-400 hover:underline"
+                >
+                  Refresh
+                </button>
+              </div>
+
+              {loading ? (
+                <p className="text-white/60">Loading tasks...</p>
+              ) : topTasks.length === 0 ? (
+                <p className="text-white/60">No tasks found.</p>
+              ) : allTopTasksComplete ? (
+                <div className="rounded-xl border border-violet-400/30 bg-violet-400/10 p-4">
+                  <p className="text-base text-white">
+                    ✨ Current focus complete
+                  </p>
+                  <p className="mt-1 text-sm text-white/70">
+                    The studio moved forward today. Choose the next three when
+                    you&apos;re ready.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setTopTasks(chooseNextThree(tasks));
+                      setCurrentStage(getCurrentStage(tasks));
+                    }}
+                    className="mt-4 text-sm text-violet-400 hover:underline"
+                  >
+                    Show next 3
+                  </button>
+                </div>
+              ) : (
+                <ul className="space-y-5">
+                  {topTasks.map((task) => (
+                    <li key={task.id} className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        className="peer mt-1 h-4 w-4 accent-violet-500"
+                        checked={task.completed}
+                        onChange={(e) =>
+                          toggleTaskCompleted(task.id, e.target.checked)
+                        }
+                      />
+
+                      <div className="flex min-w-0 flex-1 flex-col gap-2">
+                        <span
+                          className={`transition ${
+                            task.completed
+                              ? "line-through opacity-50"
+                              : "text-white"
+                          }`}
+                        >
+                          {task.title || task.text}
+                        </span>
+
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                          <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-white/70">
+                            {getStagePill(task.stage)}
+                          </span>
+
+                          <span className="text-white/50">
+                            {prettifyCategory(task.category)}
+                          </span>
+
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-xs font-medium ${getPriorityPill(
+                              task.priority,
+                            )}`}
+                          >
+                            {task.priority?.toUpperCase()}
+                          </span>
+                        </div>
+
+                        {task.depends_on_title ? (
+                          <p className="text-xs text-white/45">
+                            Depends on: {task.depends_on_title}
+                          </p>
+                        ) : null}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl">
+              <div className="mb-4 flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-xl text-white">Roadmap Progress</h3>
+                  <p className="mt-1 text-sm text-white/60">
+                    Move through the studio in a sensible order.
+                  </p>
+                </div>
+
+                <div className="flex flex-col items-end gap-2">
+                  <div className="text-right">
+                    <p className="text-sm text-white/50">Overall progress</p>
+                    <p className="text-lg text-white">
+                      {totalCompleted} / {tasks.length}
+                    </p>
+                    <p className="text-sm text-violet-300/80">
+                      {overallRoadmapPercent}%
                     </p>
                   </div>
 
-                  {stage.key === currentStage && (
-                    <span className="text-xs text-violet-300 border border-violet-400/30 bg-violet-400/15 px-2 py-1 rounded-full">
-                      Current stage
-                    </span>
-                  )}
+                  <button
+                    onClick={() => setShowFullRoadmap((prev) => !prev)}
+                    className="text-sm text-violet-400 hover:underline"
+                  >
+                    {showFullRoadmap ? "Hide roadmap" : "View full roadmap"}
+                  </button>
                 </div>
-
-                <div className="flex justify-between text-sm text-white/70 mb-2">
-                  <span>
-                    {stage.completed} of {stage.total} complete
-                  </span>
-
-                  <span>{stage.percent}%</span>
-                </div>
-
-                <div className="h-2 w-full rounded-full bg-white/10 mb-4">
-                  <div
-                    className="h-2 rounded-full bg-violet-500 transition-all"
-                    style={{ width: `${stage.percent}%` }}
-                  />
-                </div>
-
-                <Link
-                  href={`/roadmap/${stage.key}`}
-                  className="text-sm text-violet-400 hover:underline"
-                >
-                  Open stage →
-                </Link>
               </div>
-            ))}
+
+              {!showFullRoadmap && nextUnlockedStage ? (
+                <p className="mb-3 text-xs uppercase tracking-[0.2em] text-violet-300/80">
+                  Current stage
+                </p>
+              ) : null}
+
+              <div className="space-y-4">
+                {visibleStageStats.length === 0 ? (
+                  <div className="rounded-xl border border-violet-400/30 bg-violet-400/10 p-4">
+                    <p className="text-base text-white">✨ Roadmap complete</p>
+                    <p className="mt-1 text-sm text-white/70">
+                      Every stage is complete. That deserves a proud founder
+                      moment.
+                    </p>
+                  </div>
+                ) : (
+                  visibleStageStats.map((stage) => (
+                    <Link
+                      key={stage.key}
+                      href={`/roadmap/${stage.key}`}
+                      className="block"
+                    >
+                      <div
+                        className={`cursor-pointer rounded-xl border p-4 transition ${
+                          nextUnlockedStage === stage.key
+                            ? "border-violet-400/40 bg-violet-400/10 ring-1 ring-violet-400/30 hover:border-violet-400/60 hover:bg-violet-400/12 hover:shadow-[0_0_25px_rgba(139,92,246,0.18)]"
+                            : "border-white/10 bg-white/5 hover:border-violet-400/40 hover:bg-violet-400/10 hover:shadow-[0_0_25px_rgba(139,92,246,0.16)]"
+                        }`}
+                      >
+                        <div className="mb-2 flex items-start justify-between gap-4">
+                          <div>
+                            <div className="flex items-center gap-3">
+                              <h4 className="text-white">{stage.label}</h4>
+
+                              {nextUnlockedStage === stage.key ? (
+                                <span className="rounded-full border border-violet-400/30 bg-violet-400/15 px-2 py-1 text-xs text-violet-300">
+                                  Current focus
+                                </span>
+                              ) : null}
+                            </div>
+
+                            <p className="mt-1 text-sm text-white/55">
+                              {stage.description}
+                            </p>
+                          </div>
+
+                          <span className="text-sm text-violet-400">
+                            Open →
+                          </span>
+                        </div>
+
+                        <div className="mb-2 flex items-center justify-between text-sm text-white/70">
+                          <span>
+                            {stage.completed} of {stage.total} complete
+                          </span>
+                          <span>{stage.percent}%</span>
+                        </div>
+
+                        <div className="h-2 w-full rounded-full bg-white/10">
+                          <div
+                            className="h-2 rounded-full bg-violet-500 transition-all"
+                            style={{ width: `${stage.percent}%` }}
+                          />
+                        </div>
+                      </div>
+                    </Link>
+                  ))
+                )}
+              </div>
+            </div>
           </div>
-        )}
+
+          <div className="space-y-6">
+            <div className="rounded-2xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl">
+              <h3 className="text-xl text-white">Today</h3>
+              <div className="mt-4 space-y-3 text-sm">
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-white/55">Completed today</p>
+                  <p className="mt-1 text-2xl text-white">
+                    {tasksCompletedToday}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-white/55">Current stage</p>
+                  <p className="mt-1 text-lg text-white">
+                    {nextUnlockedStage
+                      ? STAGE_LABELS[nextUnlockedStage]
+                      : "All stages complete"}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-white/55">Roadmap progress</p>
+                  <p className="mt-1 text-lg text-white">
+                    {overallRoadmapPercent}%
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <Link href="/roadmap">
+              <div className="cursor-pointer rounded-2xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl transition hover:border-violet-400/40">
+                <h3 className="mb-2 text-xl text-white">Open roadmap</h3>
+                <p className="text-white/70">
+                  View the full founder journey and open any stage directly.
+                </p>
+              </div>
+            </Link>
+
+            <Link href="/business-setup">
+              <div className="cursor-pointer rounded-2xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl transition hover:border-violet-400/40">
+                <h3 className="mb-2 text-xl text-white">Open task library</h3>
+                <p className="text-white/70">
+                  Browse the full founder checklist in roadmap order.
+                </p>
+              </div>
+            </Link>
+          </div>
+        </div>
       </div>
     </WhisperLayout>
   );
