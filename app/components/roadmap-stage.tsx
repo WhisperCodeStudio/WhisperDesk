@@ -218,15 +218,24 @@ export default function RoadmapStage({ stage }: Props) {
           <ul className="space-y-5">
             {sortedTasks.map((task) => {
               const isLocked =
+                !task.completed &&
                 !!task.depends_on_title &&
                 !completedTitles.has(task.depends_on_title);
 
               return (
-                <li key={task.id} className="flex items-start gap-3">
+                <li
+                  key={task.id}
+                  className={`flex items-start gap-3 rounded-xl border p-3 transition ${
+                    isLocked
+                      ? "border-amber-400/20 bg-amber-400/5 opacity-75"
+                      : "border-white/0 bg-transparent"
+                  }`}
+                >
                   <input
                     type="checkbox"
-                    className="mt-1 h-4 w-4 accent-violet-500"
+                    className="mt-1 h-4 w-4 accent-violet-500 disabled:cursor-not-allowed disabled:opacity-40"
                     checked={task.completed}
+                    disabled={isLocked}
                     onChange={(e) =>
                       toggleTaskCompleted(task.id, e.target.checked)
                     }
@@ -237,27 +246,41 @@ export default function RoadmapStage({ stage }: Props) {
                       className={`transition ${
                         task.completed
                           ? "line-through opacity-50"
-                          : "text-white"
+                          : isLocked
+                            ? "text-white/55"
+                            : "text-white"
                       }`}
                     >
                       {task.title || task.text}
                     </span>
 
                     <div className="flex flex-wrap items-center gap-2 text-xs">
-                      <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-white/70">
+                      <span
+                        className={`rounded-full border px-2 py-0.5 ${
+                          isLocked
+                            ? "border-white/5 bg-white/5 text-white/45"
+                            : "border-white/10 bg-white/5 text-white/70"
+                        }`}
+                      >
                         {prettifyCategory(task.category)}
                       </span>
 
                       <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${getPriorityPill(
-                          task.priority,
-                        )}`}
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                          isLocked
+                            ? "border border-white/10 bg-white/5 text-white/45"
+                            : getPriorityPill(task.priority)
+                        }`}
                       >
                         {task.priority?.toUpperCase()}
                       </span>
 
                       {typeof task.flow_order === "number" ? (
-                        <span className="text-white/40">
+                        <span
+                          className={
+                            isLocked ? "text-white/30" : "text-white/40"
+                          }
+                        >
                           Flow {task.flow_order}
                         </span>
                       ) : null}
