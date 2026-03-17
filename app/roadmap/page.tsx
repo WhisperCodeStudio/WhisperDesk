@@ -252,7 +252,7 @@ export default function Home() {
         <p className="text-white/70">Here&apos;s your founder roadmap.</p>
         <p className="mb-8 mt-2 text-sm text-white/60">{getDailyMessage()}</p>
 
-        <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+        <div className="grid items-start gap-6 xl:grid-cols-[1.2fr_0.8fr]">
           <div className="space-y-6">
             <div className="rounded-2xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl">
               <div className="mb-4 flex items-start justify-between gap-4">
@@ -400,55 +400,55 @@ export default function Home() {
                   </div>
                 ) : (
                   visibleStageStats.map((stage) => (
-                    <Link
+                    <div
                       key={stage.key}
-                      href={`/roadmap/${stage.key}`}
-                      className="block"
+                      className={`rounded-xl border p-4 transition ${
+                        nextUnlockedStage === stage.key
+                          ? "border-violet-400/40 bg-violet-400/10"
+                          : "border-white/10 bg-white/5"
+                      }`}
                     >
-                      <div
-                        className={`cursor-pointer rounded-xl border p-4 transition ${
-                          nextUnlockedStage === stage.key
-                            ? "border-violet-400/40 bg-violet-400/10 ring-1 ring-violet-400/30 hover:border-violet-400/60 hover:bg-violet-400/12 hover:shadow-[0_0_25px_rgba(139,92,246,0.18)]"
-                            : "border-white/10 bg-white/5 hover:border-violet-400/40 hover:bg-violet-400/10 hover:shadow-[0_0_25px_rgba(139,92,246,0.16)]"
-                        }`}
-                      >
-                        <div className="mb-2 flex items-start justify-between gap-4">
-                          <div>
-                            <div className="flex items-center gap-3">
-                              <h4 className="text-white">{stage.label}</h4>
+                      {/* HEADER */}
+                      <div className="mb-2 flex items-start justify-between gap-4">
+                        <div>
+                          <div className="flex items-center gap-3">
+                            <h4 className="text-white">{stage.label}</h4>
 
-                              {nextUnlockedStage === stage.key ? (
-                                <span className="rounded-full border border-violet-400/30 bg-violet-400/15 px-2 py-1 text-xs text-violet-300">
-                                  Current focus
-                                </span>
-                              ) : null}
-                            </div>
-
-                            <p className="mt-1 text-sm text-white/55">
-                              {stage.description}
-                            </p>
+                            {nextUnlockedStage === stage.key && (
+                              <span className="rounded-full border border-violet-400/30 bg-violet-400/15 px-2 py-1 text-xs text-violet-300">
+                                Current focus
+                              </span>
+                            )}
                           </div>
 
-                          <span className="text-sm text-violet-400">
-                            Open →
-                          </span>
+                          <p className="mt-1 text-sm text-white/55">
+                            {stage.description}
+                          </p>
                         </div>
 
-                        <div className="mb-2 flex items-center justify-between text-sm text-white/70">
-                          <span>
-                            {stage.completed} of {stage.total} complete
-                          </span>
-                          <span>{stage.percent}%</span>
-                        </div>
-
-                        <div className="h-2 w-full rounded-full bg-white/10">
-                          <div
-                            className="h-2 rounded-full bg-violet-500 transition-all"
-                            style={{ width: `${stage.percent}%` }}
-                          />
-                        </div>
+                        <Link
+                          href={`/roadmap/${stage.key}`}
+                          className="text-sm text-violet-400 hover:text-violet-300 transition"
+                        >
+                          Open →
+                        </Link>
                       </div>
-                    </Link>
+
+                      {/* PROGRESS */}
+                      <div className="mb-2 flex items-center justify-between text-sm text-white/70">
+                        <span>
+                          {stage.completed} of {stage.total} complete
+                        </span>
+                        <span>{stage.percent}%</span>
+                      </div>
+
+                      <div className="h-2 w-full rounded-full bg-white/10">
+                        <div
+                          className="h-2 rounded-full bg-violet-500 transition-all"
+                          style={{ width: `${stage.percent}%` }}
+                        />
+                      </div>
+                    </div>
                   ))
                 )}
               </div>
@@ -484,23 +484,27 @@ export default function Home() {
               </div>
             </div>
 
-            <Link href="/roadmap">
-              <div className="cursor-pointer rounded-2xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl transition hover:border-violet-400/40">
+            <div className="flex flex-col gap-5">
+              <Link
+                href="/roadmap"
+                className="block rounded-2xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-6 shadow-[0_6px_20px_rgba(0,0,0,0.25)] backdrop-blur-xl transition hover:border-violet-400/40"
+              >
                 <h3 className="mb-2 text-xl text-white">Open roadmap</h3>
                 <p className="text-white/70">
                   View the full founder journey and open any stage directly.
                 </p>
-              </div>
-            </Link>
+              </Link>
 
-            <Link href="/business-setup">
-              <div className="cursor-pointer rounded-2xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl transition hover:border-violet-400/40">
+              <Link
+                href="/business-setup"
+                className="block rounded-2xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-6 shadow-[0_6px_20px_rgba(0,0,0,0.25)] backdrop-blur-xl transition hover:border-violet-400/40"
+              >
                 <h3 className="mb-2 text-xl text-white">Open task library</h3>
                 <p className="text-white/70">
                   Browse the full founder checklist in roadmap order.
                 </p>
-              </div>
-            </Link>
+              </Link>
+            </div>
           </div>
         </div>
       </div>
