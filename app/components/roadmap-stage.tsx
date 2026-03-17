@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import type { Task } from "@/app/data/master-tasks";
@@ -22,6 +23,15 @@ type Stage =
 type Props = {
   stage: Stage;
 };
+
+const STAGE_ORDER: Stage[] = [
+  "foundation",
+  "infrastructure",
+  "presence",
+  "growth",
+  "product",
+  "rhythm",
+];
 
 const STAGE_LABELS: Record<Stage, string> = {
   foundation: "Foundation",
@@ -115,6 +125,14 @@ export default function RoadmapStage({ stage }: Props) {
     ? Math.round((completedCount / totalTasks) * 100)
     : 0;
 
+  const currentStageIndex = STAGE_ORDER.indexOf(stage);
+  const previousStage =
+    currentStageIndex > 0 ? STAGE_ORDER[currentStageIndex - 1] : null;
+  const nextStage =
+    currentStageIndex < STAGE_ORDER.length - 1
+      ? STAGE_ORDER[currentStageIndex + 1]
+      : null;
+
   const getPriorityPill = (priority: Task["priority"]) => {
     switch (priority) {
       case "high":
@@ -143,6 +161,15 @@ export default function RoadmapStage({ stage }: Props) {
 
   return (
     <div className="space-y-6">
+      <div>
+        <Link
+          href="/roadmap"
+          className="text-sm text-violet-400 hover:underline"
+        >
+          ← Back to Roadmap
+        </Link>
+      </div>
+
       <div className="rounded-2xl border border-violet-400/30 bg-violet-400/10 p-6 shadow-[0_10px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl">
         <div className="mb-3 flex items-start justify-between gap-4">
           <div>
@@ -151,7 +178,7 @@ export default function RoadmapStage({ stage }: Props) {
           </div>
 
           <span className="rounded-full border border-violet-400/30 bg-violet-400/15 px-3 py-1 text-sm text-violet-300">
-            Current stage view
+            Stage view
           </span>
         </div>
 
@@ -253,6 +280,34 @@ export default function RoadmapStage({ stage }: Props) {
             })}
           </ul>
         )}
+      </div>
+
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          {previousStage ? (
+            <Link
+              href={`/roadmap/${previousStage}`}
+              className="text-sm text-violet-400 hover:underline"
+            >
+              ← {STAGE_LABELS[previousStage]}
+            </Link>
+          ) : (
+            <span className="text-sm text-white/30">← No previous stage</span>
+          )}
+        </div>
+
+        <div>
+          {nextStage ? (
+            <Link
+              href={`/roadmap/${nextStage}`}
+              className="text-sm text-violet-400 hover:underline"
+            >
+              {STAGE_LABELS[nextStage]} →
+            </Link>
+          ) : (
+            <span className="text-sm text-white/30">No next stage →</span>
+          )}
+        </div>
       </div>
     </div>
   );
