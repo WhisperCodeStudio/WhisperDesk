@@ -1,3 +1,9 @@
+/**
+ * 📍 WhisperDesk Page: Task Library
+ * 🗂 Route: /business-setup
+ * 🧭 Purpose: Browse all tasks by category (reference view)
+ */
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -50,7 +56,7 @@ export default function BusinessSetupPage() {
     loadTasks();
   }, []);
 
-  const toggleTaskCompleted = async (taskId: number, completed: boolean) => {
+  const toggleTaskCompleted = async (taskId: string, completed: boolean) => {
     const { error } = await supabase
       .from("tasks")
       .update({ completed })

@@ -12,7 +12,7 @@ type WhisperLayoutProps = {
 const navItems = [
   { label: "Dashboard", href: "/" },
   { label: "Roadmap", href: "/roadmap" },
-  { label: "Business Setup", href: "/business-setup" },
+  // { label: "Business Setup", href: "/business-setup" },
   { label: "Weekly Review", href: "/weekly-review" },
   { label: "Admin Vault", href: "/admin-vault" },
 ];

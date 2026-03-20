@@ -1,3 +1,9 @@
+/**
+ * 📍 WhisperDesk Page: Dashboard
+ * 🗂 Route: /
+ * 🧭 Purpose: Main overview with progress, next tasks, and quick actions
+ */
+
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
