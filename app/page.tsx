@@ -6,7 +6,7 @@
 
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import WhisperLayout from "./components/whisper-layout";
 import { supabase } from "@/lib/supabase";
@@ -51,6 +51,7 @@ export default function Home() {
   const [topTasks, setTopTasks] = useState<RoadmapTask[]>([]);
   const [currentStage, setCurrentStage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [showFullRoadmap, setShowFullRoadmap] = useState(false);
 
   const hour = new Date().getHours();
@@ -106,34 +107,56 @@ export default function Home() {
     return incompleteTasks[0].stage ?? null;
   };
 
-  useEffect(() => {
-    const loadTasks = async () => {
-      try {
-        const { data, error } = await supabase
-          .from("tasks")
-          .select("*")
-          .order("stage_order", { ascending: true })
-          .order("flow_order", { ascending: true });
+  const loadTasks = useCallback(async (isManualRefresh = false) => {
+    if (isManualRefresh) setRefreshing(true);
+    else setLoading(true);
 
-        if (error) {
-          console.error("Failed to load tasks:", error);
-          return;
-        }
+    try {
+      const { data, error } = await supabase
+        .from("tasks")
+        .select("*")
+        .order("stage_order", { ascending: true })
+        .order("flow_order", { ascending: true })
+        .order("title", { ascending: true });
 
-        if (!data) return;
-
-        setTasks(data);
-        setTopTasks(chooseNextThree(data));
-        setCurrentStage(getCurrentStage(data));
-      } catch (err) {
-        console.error("Unexpected error loading tasks:", err);
-      } finally {
-        setLoading(false);
+      if (error) {
+        console.error("Failed to load tasks:", error);
+        return;
       }
-    };
 
-    loadTasks();
+      const nextTasks = (data as RoadmapTask[]) || [];
+
+      setTasks(nextTasks);
+      setTopTasks(chooseNextThree(nextTasks));
+      setCurrentStage(getCurrentStage(nextTasks));
+    } catch (err) {
+      console.error("Unexpected error loading tasks:", err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadTasks();
+  }, [loadTasks]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("dashboard-tasks")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "tasks" },
+        () => {
+          loadTasks();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [loadTasks]);
 
   const getPriorityPill = (priority: Task["priority"]) => {
     switch (priority) {
@@ -178,13 +201,7 @@ export default function Home() {
       return;
     }
 
-    const updatedTasks = tasks.map((task) =>
-      task.id === taskId ? { ...task, completed, updated_at: updatedAt } : task,
-    );
-
-    setTasks(updatedTasks);
-    setTopTasks(chooseNextThree(updatedTasks));
-    setCurrentStage(getCurrentStage(updatedTasks));
+    await loadTasks();
   };
 
   const tasksCompletedToday = tasks.filter((task) => {
@@ -273,13 +290,11 @@ export default function Home() {
                 </div>
 
                 <button
-                  onClick={() => {
-                    setTopTasks(chooseNextThree(tasks));
-                    setCurrentStage(getCurrentStage(tasks));
-                  }}
-                  className="text-sm text-violet-400 hover:underline"
+                  onClick={() => loadTasks(true)}
+                  disabled={refreshing}
+                  className="text-sm text-violet-400 hover:underline disabled:opacity-50"
                 >
-                  Refresh
+                  {refreshing ? "Refreshing..." : "Refresh"}
                 </button>
               </div>
 
@@ -297,13 +312,11 @@ export default function Home() {
                     you&apos;re ready.
                   </p>
                   <button
-                    onClick={() => {
-                      setTopTasks(chooseNextThree(tasks));
-                      setCurrentStage(getCurrentStage(tasks));
-                    }}
-                    className="mt-4 text-sm text-violet-400 hover:underline"
+                    onClick={() => loadTasks(true)}
+                    disabled={refreshing}
+                    className="mt-4 text-sm text-violet-400 hover:underline disabled:opacity-50"
                   >
-                    Show next 3
+                    {refreshing ? "Refreshing..." : "Show next 3"}
                   </button>
                 </div>
               ) : (
