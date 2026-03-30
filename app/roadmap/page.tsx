@@ -7,7 +7,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import WhisperLayout from "@/app/components/whisper-layout";
 import { supabase } from "@/lib/supabase";
 import type { Task } from "@/app/data/master-tasks";
@@ -76,35 +76,54 @@ export default function RoadmapPage() {
   const [tasks, setTasks] = useState<RoadmapTask[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const loadTasks = async () => {
-      try {
-        const { data, error } = await supabase
-          .from("tasks")
-          .select("*")
-          .in(
-            "stage",
-            STAGES.map((stage) => stage.key),
-          )
-          .order("stage_order", { ascending: true })
-          .order("flow_order", { ascending: true })
-          .order("title", { ascending: true });
+  const loadTasks = useCallback(async () => {
+    setLoading(true);
 
-        if (error) {
-          console.error("Error loading roadmap tasks:", error);
-          return;
-        }
+    try {
+      const { data, error } = await supabase
+        .from("tasks")
+        .select("*")
+        .in(
+          "stage",
+          STAGES.map((stage) => stage.key),
+        )
+        .order("stage_order", { ascending: true })
+        .order("flow_order", { ascending: true })
+        .order("title", { ascending: true });
 
-        setTasks((data as RoadmapTask[]) || []);
-      } catch (err) {
-        console.error("Unexpected error loading roadmap tasks:", err);
-      } finally {
-        setLoading(false);
+      if (error) {
+        console.error("Error loading roadmap tasks:", error);
+        return;
       }
-    };
 
-    loadTasks();
+      setTasks((data as RoadmapTask[]) || []);
+    } catch (err) {
+      console.error("Unexpected error loading roadmap tasks:", err);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadTasks();
+  }, [loadTasks]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("roadmap-tasks")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "tasks" },
+        () => {
+          loadTasks();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [loadTasks]);
 
   const overallStats = useMemo(() => {
     const total = tasks.length;
