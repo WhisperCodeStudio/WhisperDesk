@@ -7,7 +7,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import WhisperLayout from "./components/whisper-layout";
 import { supabase } from "@/lib/supabase";
 import type { Task } from "./data/master-tasks";
@@ -17,6 +16,16 @@ type RoadmapTask = Task & {
   stage_order?: number | null;
   flow_order?: number | null;
   depends_on_title?: string | null;
+  project?: string | null;
+  project_id?: string | null;
+};
+
+type Project = {
+  id: string;
+  name: string;
+  description?: string | null;
+  status?: string | null;
+  parent_project_id?: string | null;
 };
 
 const STAGE_LABELS: Record<string, string> = {
@@ -28,31 +37,69 @@ const STAGE_LABELS: Record<string, string> = {
   rhythm: "Founder Rhythm",
 };
 
-const STAGE_DESCRIPTIONS: Record<string, string> = {
-  foundation: "Core business direction, offers, and structure.",
-  infrastructure: "Systems, admin, and delivery support.",
-  presence: "Brand, website, and portfolio visibility.",
-  growth: "Marketing, lead flow, and launch momentum.",
-  product: "Studio tools and product-building work.",
-  rhythm: "Founder routines and sustainable cadence.",
-};
 
-const STAGE_ORDER = [
-  "foundation",
-  "infrastructure",
-  "presence",
-  "growth",
-  "product",
-  "rhythm",
+
+const DEFAULT_PROJECT_ID = "whispercode-business";
+
+const FALLBACK_PROJECTS: Project[] = [
+  {
+    id: DEFAULT_PROJECT_ID,
+    name: "WhisperCode - Business",
+    description: "Studio, offers, clients, systems, admin, and growth.",
+  },
+  {
+    id: "nomad-rose-fivem",
+    name: "Nomad Rose - FiveM",
+    description: "Server, scripts, community, worldbuilding, and design.",
+  },
+  {
+    id: "apps",
+    name: "Apps",
+    description: "Product lab for app ideas, builds, and launches.",
+  },
+  {
+    id: "holbeton-events",
+    name: "Holbeton Events",
+    description: "Local events, planning, promotion, and logistics.",
+  },
+  {
+    id: "books",
+    name: "Books",
+    description: "Writing ideas, outlines, drafts, and publishing steps.",
+  },
+  {
+    id: "village-computer-classes",
+    name: "Computer Classes",
+    description: "Lessons, schedules, learners, materials, and community support.",
+  },
+  {
+    id: "app-insurance-policy-renewal",
+    name: "Insurance Policy Renewal",
+    parent_project_id: "apps",
+  },
+  {
+    id: "app-kindred-archives-companion",
+    name: "Kindred Archives Companion",
+    parent_project_id: "apps",
+  },
+  { id: "app-symptosync", name: "SymptoSync", parent_project_id: "apps" },
+  {
+    id: "app-whispergrimoire",
+    name: "whispergrimoire",
+    parent_project_id: "apps",
+  },
+  { id: "app-whispernest", name: "WhisperNest", parent_project_id: "apps" },
+  { id: "app-whisperverse", name: "whisperverse", parent_project_id: "apps" },
 ];
 
 export default function Home() {
   const [tasks, setTasks] = useState<RoadmapTask[]>([]);
-  const [topTasks, setTopTasks] = useState<RoadmapTask[]>([]);
-  const [currentStage, setCurrentStage] = useState<string | null>(null);
+  const [projects, setProjects] = useState<Project[]>(FALLBACK_PROJECTS);
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [showFullRoadmap, setShowFullRoadmap] = useState(false);
+  const [selectedProjectId, setSelectedProjectId] =
+    useState(DEFAULT_PROJECT_ID);
 
   const hour = new Date().getHours();
 
@@ -63,50 +110,75 @@ export default function Home() {
         ? "Good afternoon Lexii"
         : "Good evening Lexii";
 
-  const chooseNextThree = (taskList: RoadmapTask[]): RoadmapTask[] => {
-    const incompleteTasks = [...taskList]
-      .filter((task) => !task.completed)
-      .sort((a, b) => {
-        const stageA = a.stage_order ?? 999;
-        const stageB = b.stage_order ?? 999;
-        if (stageA !== stageB) return stageA - stageB;
+  const getTaskProjectId = useCallback(
+    (task: RoadmapTask) => task.project_id || task.project || DEFAULT_PROJECT_ID,
+    [],
+  );
 
-        const flowA = a.flow_order ?? 999;
-        const flowB = b.flow_order ?? 999;
-        if (flowA !== flowB) return flowA - flowB;
+  const getProjectIdsForSelection = useCallback(
+    (projectId: string, projectList: Project[]) =>
+      new Set([
+        projectId,
+        ...projectList
+          .filter((project) => project.parent_project_id === projectId)
+          .map((project) => project.id),
+      ]),
+    [],
+  );
 
-        return (a.title || "").localeCompare(b.title || "");
-      });
+  const chooseNextThree = useCallback(
+    (taskList: RoadmapTask[], projectIds: Set<string>): RoadmapTask[] => {
+      const incompleteTasks = [...taskList]
+        .filter(
+          (task) => !task.completed && projectIds.has(getTaskProjectId(task)),
+        )
+        .sort((a, b) => {
+          const stageA = a.stage_order ?? 999;
+          const stageB = b.stage_order ?? 999;
+          if (stageA !== stageB) return stageA - stageB;
 
-    if (incompleteTasks.length === 0) return [];
+          const flowA = a.flow_order ?? 999;
+          const flowB = b.flow_order ?? 999;
+          if (flowA !== flowB) return flowA - flowB;
 
-    const currentStageOrder = incompleteTasks[0].stage_order;
+          return (a.title || "").localeCompare(b.title || "");
+        });
 
-    return incompleteTasks
-      .filter((task) => task.stage_order === currentStageOrder)
-      .slice(0, 3);
-  };
+      if (incompleteTasks.length === 0) return [];
 
-  const getCurrentStage = (taskList: RoadmapTask[]): string | null => {
-    const incompleteTasks = [...taskList]
-      .filter((task) => !task.completed)
-      .sort((a, b) => {
-        const stageA = a.stage_order ?? 999;
-        const stageB = b.stage_order ?? 999;
-        if (stageA !== stageB) return stageA - stageB;
+      const currentStageOrder = incompleteTasks[0].stage_order;
 
-        const flowA = a.flow_order ?? 999;
-        const flowB = b.flow_order ?? 999;
-        if (flowA !== flowB) return flowA - flowB;
+      return incompleteTasks
+        .filter((task) => task.stage_order === currentStageOrder)
+        .slice(0, 3);
+    },
+    [getTaskProjectId],
+  );
 
-        return (a.title || "").localeCompare(b.title || "");
-      });
+  const getCurrentStage = useCallback(
+    (taskList: RoadmapTask[], projectIds: Set<string>): string | null => {
+      const incompleteTasks = [...taskList]
+        .filter(
+          (task) => !task.completed && projectIds.has(getTaskProjectId(task)),
+        )
+        .sort((a, b) => {
+          const stageA = a.stage_order ?? 999;
+          const stageB = b.stage_order ?? 999;
+          if (stageA !== stageB) return stageA - stageB;
 
-    if (incompleteTasks.length === 0) return null;
+          const flowA = a.flow_order ?? 999;
+          const flowB = b.flow_order ?? 999;
+          if (flowA !== flowB) return flowA - flowB;
 
-    return incompleteTasks[0].stage ?? null;
-  };
+          return (a.title || "").localeCompare(b.title || "");
+        });
 
+      if (incompleteTasks.length === 0) return null;
+
+      return incompleteTasks[0].stage ?? null;
+    },
+    [getTaskProjectId],
+  );
   const loadTasks = useCallback(async (isManualRefresh = false) => {
     if (isManualRefresh) setRefreshing(true);
     else setLoading(true);
@@ -125,10 +197,7 @@ export default function Home() {
       }
 
       const nextTasks = (data as RoadmapTask[]) || [];
-
       setTasks(nextTasks);
-      setTopTasks(chooseNextThree(nextTasks));
-      setCurrentStage(getCurrentStage(nextTasks));
     } catch (err) {
       console.error("Unexpected error loading tasks:", err);
     } finally {
@@ -137,9 +206,48 @@ export default function Home() {
     }
   }, []);
 
+  const loadProjects = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from("projects")
+        .select("id, name, description, status, parent_project_id")
+        .order("parent_project_id", { ascending: true, nullsFirst: true })
+        .order("name", { ascending: true });
+
+      if (error) {
+        console.error("Failed to load projects:", error);
+        return;
+      }
+
+      const nextProjects = (data as Project[]) || [];
+      const mergedProjects = [...nextProjects];
+
+      FALLBACK_PROJECTS.forEach((fallbackProject) => {
+        if (!mergedProjects.some((project) => project.id === fallbackProject.id)) {
+          mergedProjects.push(fallbackProject);
+        }
+      });
+
+      if (mergedProjects.length === 0) return;
+      setProjects((currentProjects) => {
+        const currentSignature = JSON.stringify(currentProjects);
+        const nextSignature = JSON.stringify(mergedProjects);
+
+        return currentSignature === nextSignature ? currentProjects : mergedProjects;
+      });
+
+      if (!mergedProjects.some((project) => project.id === selectedProjectId)) {
+        setSelectedProjectId(mergedProjects[0].id);
+      }
+    } catch (err) {
+      console.error("Unexpected error loading projects:", err);
+    }
+  }, [selectedProjectId]);
+
   useEffect(() => {
+    loadProjects();
     loadTasks();
-  }, [loadTasks]);
+  }, [loadProjects, loadTasks]);
 
   useEffect(() => {
     const channel = supabase
@@ -151,13 +259,77 @@ export default function Home() {
           loadTasks();
         },
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "projects" },
+        () => {
+          loadProjects();
+        },
+      )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [loadTasks]);
+  }, [loadProjects, loadTasks]);
 
+  const selectedProject = useMemo(() => {
+    return (
+      projects.find((project) => project.id === selectedProjectId) ||
+      projects[0] ||
+      FALLBACK_PROJECTS[0]
+    );
+  }, [projects, selectedProjectId]);
+
+  const selectedProjectIds = useMemo(
+    () => getProjectIdsForSelection(selectedProjectId, projects),
+    [getProjectIdsForSelection, projects, selectedProjectId],
+  );
+
+  const visibleTasks = useMemo(() => {
+    return tasks.filter((task) => selectedProjectIds.has(getTaskProjectId(task)));
+  }, [getTaskProjectId, selectedProjectIds, tasks]);
+
+  const topTasks = useMemo(
+    () => chooseNextThree(visibleTasks, selectedProjectIds),
+    [chooseNextThree, selectedProjectIds, visibleTasks],
+  );
+
+  const currentStage = useMemo(
+    () => getCurrentStage(visibleTasks, selectedProjectIds),
+    [getCurrentStage, selectedProjectIds, visibleTasks],
+  );
+
+  const selectedProjectChildren = useMemo(() => {
+    return projects
+      .filter((project) => project.parent_project_id === selectedProjectId)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [projects, selectedProjectId]);
+
+  const selectedProjectChildCount = selectedProjectChildren.length;
+  const hasProjectLanes = selectedProjectChildCount > 0;
+
+  const projectCompletionStats = useMemo(() => {
+    return projects
+      .filter((project) => !project.parent_project_id)
+      .map((project) => {
+        const projectIds = getProjectIdsForSelection(project.id, projects);
+        const projectTasks = tasks.filter((task) =>
+          projectIds.has(getTaskProjectId(task)),
+        );
+        const completed = projectTasks.filter((task) => task.completed).length;
+        const total = projectTasks.length;
+        const percent = total ? Math.round((completed / total) * 100) : 0;
+
+        return {
+          ...project,
+          completed,
+          total,
+          open: total - completed,
+          percent,
+        };
+      });
+  }, [getProjectIdsForSelection, getTaskProjectId, projects, tasks]);
   const getPriorityPill = (priority: Task["priority"]) => {
     switch (priority) {
       case "high":
@@ -204,7 +376,7 @@ export default function Home() {
     await loadTasks();
   };
 
-  const tasksCompletedToday = tasks.filter((task) => {
+  const tasksCompletedToday = visibleTasks.filter((task) => {
     if (!task.completed || !task.updated_at) return false;
 
     const today = new Date().toDateString();
@@ -213,45 +385,10 @@ export default function Home() {
     return today === updated;
   }).length;
 
-  const totalCompleted = tasks.filter((task) => task.completed).length;
-
-  const nextUnlockedStage = useMemo(() => {
-    return STAGE_ORDER.find((stage) =>
-      tasks.some((task) => task.stage === stage && !task.completed),
-    );
-  }, [tasks]);
-
-  const stageStats = useMemo(() => {
-    return STAGE_ORDER.map((stage) => {
-      const stageTasks = tasks.filter((task) => task.stage === stage);
-      const completed = stageTasks.filter((task) => task.completed).length;
-
-      return {
-        key: stage,
-        label: STAGE_LABELS[stage],
-        description: STAGE_DESCRIPTIONS[stage],
-        total: stageTasks.length,
-        completed,
-        percent: stageTasks.length
-          ? Math.round((completed / stageTasks.length) * 100)
-          : 0,
-      };
-    });
-  }, [tasks]);
-
-  const visibleStageStats = useMemo(() => {
-    if (showFullRoadmap) return stageStats;
-    return stageStats.filter((stage) => stage.key === nextUnlockedStage);
-  }, [showFullRoadmap, stageStats, nextUnlockedStage]);
-
-  const overallRoadmapPercent = useMemo(() => {
-    if (tasks.length === 0) return 0;
-    return Math.round((totalCompleted / tasks.length) * 100);
-  }, [tasks.length, totalCompleted]);
 
   const getDailyMessage = () => {
     if (tasksCompletedToday === 0) {
-      return "A fresh start for the studio today.";
+      return "A fresh start for this project today.";
     }
 
     if (tasksCompletedToday === 1) {
@@ -272,43 +409,78 @@ export default function Home() {
     <WhisperLayout>
       <div>
         <h2 className="mb-2 text-3xl text-white">{greeting}</h2>
-        <p className="text-white/70">Here&apos;s your founder roadmap.</p>
+        <p className="text-white/70">A calm command centre for {selectedProject.name}.</p>
         <p className="mb-8 mt-2 text-sm text-white/60">{getDailyMessage()}</p>
+        {selectedProjectChildCount > 0 ? (
+          <p className="mb-6 text-xs text-white/45">
+            Includes {selectedProjectChildCount} app lane
+            {selectedProjectChildCount === 1 ? "" : "s"} under this project.
+          </p>
+        ) : null}
 
-        <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+        <div
+          className={`grid gap-6 ${
+            hasProjectLanes ? "xl:grid-cols-[1.2fr_0.8fr]" : "grid-cols-1"
+          }`}
+        >
           <div className="space-y-6">
             <div className="rounded-2xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl">
-              <div className="mb-4 flex items-start justify-between gap-4">
+              <div className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
-                  <h3 className="text-xl text-white">
-                    Next 3 ·{" "}
-                    {currentStage ? getStagePill(currentStage) : "All Done"}
-                  </h3>
+                  <h3 className="text-xl text-white">Next 3</h3>
                   <p className="mt-1 text-sm text-white/60">
-                    Your next calm, logical steps. No random gremlins.
+                    {selectedProject.description}
+                  </p>
+                  <p className="mt-2 text-xs uppercase tracking-[0.2em] text-violet-300/80">
+                    {currentStage ? getStagePill(currentStage) : "All Done"}
                   </p>
                 </div>
 
-                <button
-                  onClick={() => loadTasks(true)}
-                  disabled={refreshing}
-                  className="text-sm text-violet-400 hover:underline disabled:opacity-50"
-                >
-                  {refreshing ? "Refreshing..." : "Refresh"}
-                </button>
-              </div>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center lg:flex-col lg:items-end">
+                  <label className="sr-only" htmlFor="project-focus">
+                    Choose project
+                  </label>
+                  <select
+                    id="project-focus"
+                    value={selectedProjectId}
+                    onChange={(e) => {
+                      setSelectedProjectId(e.target.value);
+                    }}
+                    className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none transition focus:border-violet-400"
+                  >
+                    {projects.map((project) => (
+                      <option key={project.id} value={project.id}>
+                        {project.parent_project_id ? "  · " : ""}{project.name}
+                      </option>
+                    ))}
+                  </select>
 
+                  <button
+                    onClick={() => loadTasks(true)}
+                    disabled={refreshing}
+                    className="text-sm text-violet-400 hover:underline disabled:opacity-50"
+                  >
+                    {refreshing ? "Refreshing..." : "Refresh"}
+                  </button>
+                </div>
+              </div>
               {loading ? (
                 <p className="text-white/60">Loading tasks...</p>
               ) : topTasks.length === 0 ? (
-                <p className="text-white/60">No tasks found.</p>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-white">No tasks for this project yet.</p>
+                  <p className="mt-1 text-sm text-white/60">
+                    This space is ready when {selectedProject.name} has its
+                    first steps.
+                  </p>
+                </div>
               ) : allTopTasksComplete ? (
                 <div className="rounded-xl border border-violet-400/30 bg-violet-400/10 p-4">
                   <p className="text-base text-white">
                     ✨ Current focus complete
                   </p>
                   <p className="mt-1 text-sm text-white/70">
-                    The studio moved forward today. Choose the next three when
+                    This project moved forward today. Choose the next three when
                     you&apos;re ready.
                   </p>
                   <button
@@ -374,152 +546,104 @@ export default function Home() {
             </div>
 
             <div className="rounded-2xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl">
-              <div className="mb-4 flex items-start justify-between gap-4">
+              <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                 <div>
-                  <h3 className="text-xl text-white">Roadmap Progress</h3>
+                  <h3 className="text-xl text-white">Project completion</h3>
                   <p className="mt-1 text-sm text-white/60">
-                    Move through the studio in a sensible order.
+                    A visual read of each big project&apos;s progress.
                   </p>
                 </div>
 
-                <div className="flex flex-col items-end gap-2">
-                  <div className="text-right">
-                    <p className="text-sm text-white/50">Overall progress</p>
-                    <p className="text-lg text-white">
-                      {totalCompleted} / {tasks.length}
-                    </p>
-                    <p className="text-sm text-violet-300/80">
-                      {overallRoadmapPercent}%
-                    </p>
-                  </div>
-
-                  <button
-                    onClick={() => setShowFullRoadmap((prev) => !prev)}
-                    className="text-sm text-violet-400 hover:underline"
-                  >
-                    {showFullRoadmap ? "Hide roadmap" : "View full roadmap"}
-                  </button>
-                </div>
+                <p className="text-xs uppercase tracking-[0.18em] text-violet-300/80">
+                  Whole desk
+                </p>
               </div>
 
-              {!showFullRoadmap && nextUnlockedStage ? (
-                <p className="mb-3 text-xs uppercase tracking-[0.2em] text-violet-300/80">
-                  Current stage
-                </p>
-              ) : null}
-
-              <div className="space-y-4">
-                {visibleStageStats.length === 0 ? (
-                  <div className="rounded-xl border border-violet-400/30 bg-violet-400/10 p-4">
-                    <p className="text-base text-white">✨ Roadmap complete</p>
-                    <p className="mt-1 text-sm text-white/70">
-                      Every stage is complete. That deserves a proud founder
-                      moment.
-                    </p>
-                  </div>
-                ) : (
-                  visibleStageStats.map((stage) => (
-                    <div
-                      key={stage.key}
-                      className={`rounded-xl border p-4 transition ${
-                        nextUnlockedStage === stage.key
+              {loading ? (
+                <p className="text-white/60">Loading project charts...</p>
+              ) : (
+                <div
+                  className={`grid gap-4 ${
+                    hasProjectLanes
+                      ? "md:grid-cols-2"
+                      : "md:grid-cols-2 2xl:grid-cols-3"
+                  }`}
+                >
+                  {projectCompletionStats.map((project) => (
+                    <button
+                      key={project.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedProjectId(project.id);
+                        }}
+                      className={`group min-h-34 rounded-2xl border p-4 text-left transition hover:border-violet-400/35 hover:bg-violet-400/10 ${
+                        selectedProjectId === project.id
                           ? "border-violet-400/40 bg-violet-400/10"
                           : "border-white/10 bg-white/5"
                       }`}
                     >
-                      <div className="mb-2 flex items-start justify-between gap-4">
-                        <div>
-                          <h4 className="text-white">{stage.label}</h4>
-                          <p className="mt-1 text-sm text-white/55">
-                            {stage.description}
-                          </p>
+                      <div className="grid gap-4 sm:grid-cols-[5rem_1fr] sm:items-center">
+                        <div
+                          className="relative grid h-20 w-20 shrink-0 place-items-center rounded-full"
+                          style={{
+                            background: `conic-gradient(#8b5cf6 ${project.percent}%, rgba(255,255,255,0.1) 0)`,
+                          }}
+                          aria-label={`${project.percent}% complete`}
+                        >
+                          <div className="grid h-14 w-14 place-items-center rounded-full bg-[#070b1a] text-sm font-medium text-white">
+                            {project.percent}%
+                          </div>
                         </div>
 
-                        {nextUnlockedStage === stage.key ? (
-                          <span className="rounded-full border border-violet-400/30 bg-violet-400/15 px-2 py-1 text-xs text-violet-300">
-                            Current focus
-                          </span>
-                        ) : null}
+                        <div className="min-w-0">
+                          <h4 className="text-base leading-5 text-white group-hover:text-violet-100">
+                            {project.name}
+                          </h4>
+                          <p className="mt-1 text-sm text-white/55">
+                            {project.completed} of {project.total} complete
+                          </p>
+                          <p className="mt-1 text-xs text-white/40">
+                            {project.open} open
+                          </p>
+                        </div>
                       </div>
-
-                      <div className="mb-2 flex items-center justify-between text-sm text-white/70">
-                        <span>
-                          {stage.completed} of {stage.total} complete
-                        </span>
-                        <span>{stage.percent}%</span>
-                      </div>
-
-                      <div className="h-2 w-full rounded-full bg-white/10">
-                        <div
-                          className="h-2 rounded-full bg-violet-500 transition-all"
-                          style={{ width: `${stage.percent}%` }}
-                        />
-                      </div>
-
-                      <div className="mt-4">
-                        <Link
-                          href={`/roadmap/${stage.key}`}
-                          className="text-sm text-violet-400 hover:underline"
-                        >
-                          Open stage →
-                        </Link>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
           <div className="space-y-6">
-            <div className="rounded-2xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl">
-              <h3 className="text-xl text-white">Today</h3>
-              <div className="mt-4 space-y-3 text-sm">
-                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                  <p className="text-white/55">Completed today</p>
-                  <p className="mt-1 text-2xl text-white">
-                    {tasksCompletedToday}
-                  </p>
-                </div>
-
-                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                  <p className="text-white/55">Current stage</p>
-                  <p className="mt-1 text-lg text-white">
-                    {nextUnlockedStage
-                      ? STAGE_LABELS[nextUnlockedStage]
-                      : "All stages complete"}
-                  </p>
-                </div>
-
-                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                  <p className="text-white/55">Roadmap progress</p>
-                  <p className="mt-1 text-lg text-white">
-                    {overallRoadmapPercent}%
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <Link href="/roadmap">
-              <div className="cursor-pointer rounded-2xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl transition hover:border-violet-400/40">
-                <h3 className="mb-2 text-xl text-white">Open roadmap</h3>
-                <p className="text-white/70">
-                  View the full founder journey and open any stage directly.
+            {hasProjectLanes ? (
+              <div className="rounded-2xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl">
+                <h3 className="text-xl text-white">Project lanes</h3>
+                <p className="mt-1 text-sm text-white/60">
+                  Choose a child project when you want a narrower focus.
                 </p>
-              </div>
-            </Link>
 
-            <Link href="/business-setup">
-              <div className="cursor-pointer rounded-2xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl transition hover:border-violet-400/40">
-                <h3 className="mb-2 text-xl text-white">Open task library</h3>
-                <p className="text-white/70">
-                  Browse the full founder checklist in roadmap order.
-                </p>
+                <div className="mt-4 space-y-2">
+                  {selectedProjectChildren.map((project) => (
+                    <button
+                      key={project.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedProjectId(project.id);
+                        }}
+                      className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left text-sm text-white/80 transition hover:border-violet-400/30 hover:bg-violet-400/10 hover:text-white"
+                    >
+                      <span>{project.name}</span>
+                      <span className="text-white/35">Open</span>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </Link>
+            ) : null}
           </div>
         </div>
       </div>
     </WhisperLayout>
   );
 }
+
+

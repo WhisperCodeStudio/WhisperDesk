@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import type { Task } from "@/app/data/master-tasks";
 
@@ -10,6 +11,16 @@ type RoadmapTask = Task & {
   stage_order?: number | null;
   flow_order?: number | null;
   depends_on_title?: string | null;
+  project?: string | null;
+  project_id?: string | null;
+};
+
+type Project = {
+  id: string;
+  name: string;
+  description?: string | null;
+  status?: string | null;
+  parent_project_id?: string | null;
 };
 
 type Stage =
@@ -51,9 +62,101 @@ const STAGE_DESCRIPTIONS: Record<Stage, string> = {
   rhythm: "Founder routines and sustainable cadence.",
 };
 
+const DEFAULT_PROJECT_ID = "whispercode-business";
+
+const FALLBACK_PROJECTS: Project[] = [
+  {
+    id: DEFAULT_PROJECT_ID,
+    name: "WhisperCode - Business",
+    description: "Studio, offers, clients, systems, admin, and growth.",
+  },
+  {
+    id: "nomad-rose-fivem",
+    name: "Nomad Rose - FiveM",
+    description: "Server, scripts, community, worldbuilding, and design.",
+  },
+  {
+    id: "apps",
+    name: "Apps",
+    description: "Product lab for app ideas, builds, and launches.",
+  },
+  {
+    id: "holbeton-events",
+    name: "Holbeton Events",
+    description: "Local events, planning, promotion, and logistics.",
+  },
+  {
+    id: "books",
+    name: "Books",
+    description: "Writing ideas, outlines, drafts, and publishing steps.",
+  },
+  {
+    id: "village-computer-classes",
+    name: "Computer Classes",
+    description: "Lessons, schedules, learners, materials, and community support.",
+  },
+];
+
 export default function RoadmapStage({ stage }: Props) {
+  const searchParams = useSearchParams();
+  const selectedProjectId = searchParams.get("project") || DEFAULT_PROJECT_ID;
   const [tasks, setTasks] = useState<RoadmapTask[]>([]);
+  const [projects, setProjects] = useState<Project[]>(FALLBACK_PROJECTS);
   const [loading, setLoading] = useState(true);
+
+  const getTaskProjectId = useCallback(
+    (task: RoadmapTask) => task.project_id || task.project || DEFAULT_PROJECT_ID,
+    [],
+  );
+
+  const selectedProject = useMemo(() => {
+    return (
+      projects.find((project) => project.id === selectedProjectId) ||
+      projects[0] ||
+      FALLBACK_PROJECTS[0]
+    );
+  }, [projects, selectedProjectId]);
+
+  const selectedProjectIds = useMemo(() => {
+    return new Set([
+      selectedProjectId,
+      ...projects
+        .filter((project) => project.parent_project_id === selectedProjectId)
+        .map((project) => project.id),
+    ]);
+  }, [projects, selectedProjectId]);
+
+  useEffect(() => {
+    const loadProjects = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("projects")
+          .select("id, name, description, status, parent_project_id")
+          .order("parent_project_id", { ascending: true, nullsFirst: true })
+          .order("name", { ascending: true });
+
+        if (error) {
+          console.error("Error loading stage projects:", error);
+          return;
+        }
+
+        const nextProjects = (data as Project[]) || [];
+        const mergedProjects = [...nextProjects];
+
+        FALLBACK_PROJECTS.forEach((fallbackProject) => {
+          if (!mergedProjects.some((project) => project.id === fallbackProject.id)) {
+            mergedProjects.push(fallbackProject);
+          }
+        });
+
+        setProjects(mergedProjects);
+      } catch (err) {
+        console.error("Unexpected error loading stage projects:", err);
+      }
+    };
+
+    void loadProjects();
+  }, []);
 
   useEffect(() => {
     const loadTasks = async () => {
@@ -103,24 +206,28 @@ export default function RoadmapStage({ stage }: Props) {
     );
   };
 
+  const visibleTasks = useMemo(() => {
+    return tasks.filter((task) => selectedProjectIds.has(getTaskProjectId(task)));
+  }, [getTaskProjectId, selectedProjectIds, tasks]);
+
   const completedTitles = useMemo(() => {
     return new Set(
-      tasks.filter((task) => task.completed).map((task) => task.title),
+      visibleTasks.filter((task) => task.completed).map((task) => task.title),
     );
-  }, [tasks]);
+  }, [visibleTasks]);
 
   const sortedTasks = useMemo(() => {
-    return [...tasks].sort((a, b) => {
+    return [...visibleTasks].sort((a, b) => {
       const flowA = a.flow_order ?? 999;
       const flowB = b.flow_order ?? 999;
       if (flowA !== flowB) return flowA - flowB;
 
       return (a.title || "").localeCompare(b.title || "");
     });
-  }, [tasks]);
+  }, [visibleTasks]);
 
-  const totalTasks = tasks.length;
-  const completedCount = tasks.filter((task) => task.completed).length;
+  const totalTasks = visibleTasks.length;
+  const completedCount = visibleTasks.filter((task) => task.completed).length;
   const percentComplete = totalTasks
     ? Math.round((completedCount / totalTasks) * 100)
     : 0;
@@ -163,7 +270,7 @@ export default function RoadmapStage({ stage }: Props) {
     <div className="space-y-6">
       <div>
         <Link
-          href="/roadmap"
+          href={`/roadmap?project=${selectedProjectId}`}
           className="text-sm text-violet-400 hover:underline"
         >
           ← Back to Roadmap
@@ -173,6 +280,7 @@ export default function RoadmapStage({ stage }: Props) {
       <div className="rounded-2xl border border-violet-400/30 bg-violet-400/10 p-6 shadow-[0_10px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl">
         <div className="mb-3 flex items-start justify-between gap-4">
           <div>
+            <p className="mb-2 text-sm text-violet-200/80">{selectedProject.name}</p>
             <h2 className="text-3xl text-white">{STAGE_LABELS[stage]}</h2>
             <p className="mt-2 text-white/70">{STAGE_DESCRIPTIONS[stage]}</p>
           </div>
@@ -309,7 +417,7 @@ export default function RoadmapStage({ stage }: Props) {
         <div>
           {previousStage ? (
             <Link
-              href={`/roadmap/${previousStage}`}
+              href={`/roadmap/${previousStage}?project=${selectedProjectId}`}
               className="text-sm text-violet-400 hover:underline"
             >
               ← {STAGE_LABELS[previousStage]}
@@ -322,7 +430,7 @@ export default function RoadmapStage({ stage }: Props) {
         <div>
           {nextStage ? (
             <Link
-              href={`/roadmap/${nextStage}`}
+              href={`/roadmap/${nextStage}?project=${selectedProjectId}`}
               className="text-sm text-violet-400 hover:underline"
             >
               {STAGE_LABELS[nextStage]} →
@@ -335,3 +443,7 @@ export default function RoadmapStage({ stage }: Props) {
     </div>
   );
 }
+
+
+
+
